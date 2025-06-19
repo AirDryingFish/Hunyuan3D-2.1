@@ -65,17 +65,17 @@ class Diffuser(pl.LightningModule):
             self.init_from_ckpt(ckpt_path, ignore_keys=ignore_keys)
 
         # ========= config lora model ========= #
-        from omegaconf import OmegaConf
-        lora_config = OmegaConf.create({
-            "rank": 16,
-            "target_modules": ["to_q","to_k","to_v","out_proj","proj", "net.2"]
-        })
+        # from omegaconf import OmegaConf
+        # lora_config = OmegaConf.create({
+        #     "rank": 16,
+        #     "target_modules": ["to_q","to_k","to_v","out_proj","proj", "net.2"]
+        # })
 
         if lora_config is not None:
             from peft import LoraConfig, get_peft_model
             loraconfig = LoraConfig(
                 r=lora_config.rank,
-                lora_alpha=lora_config.rank,
+                # lora_alpha=lora_config.rank,
                 target_modules=lora_config.get('target_modules')
             )
             self.model = get_peft_model(self.model, loraconfig)

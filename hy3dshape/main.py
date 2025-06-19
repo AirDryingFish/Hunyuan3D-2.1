@@ -49,6 +49,17 @@ class SetupCallback(Callback):
             os.makedirs(self.ckptdir, exist_ok=True)
 
 
+class AdapterOnlyCheckpoint(ModelCheckpoint):
+    """只保留 LoRA Adapter 参数的 ModelCheckpoint"""
+
+    def on_save_checkpoint(
+        self, trainer, pl_module, checkpoint: Dict[str, Any]
+    ) -> None:
+        super().on_save_checkpoint(trainer, pl_module, checkpoint)
+        full_sd = checkpoint["state_dict"]
+        adapter_sd = {k: v for k, v in full_sd.items() if "lora_" in k}
+        checkpoint["state_dict"] = adapter_sd
+
 def setup_callbacks(config: DictConfig) -> Tuple[List[Callback], Logger]:
     training_cfg = config.training
     basedir = Path(training_cfg.output_dir)
@@ -58,14 +69,39 @@ def setup_callbacks(config: DictConfig) -> Tuple[List[Callback], Logger]:
     setup_callback = SetupCallback(config, basedir)
     all_callbacks.append(setup_callback)
     
-    checkpoint_callback = ModelCheckpoint(
-        dirpath=setup_callback.ckptdir,
-        filename="ckpt-{step:08d}",
-        monitor=training_cfg.monitor,
-        mode="max",
-        save_top_k=-1,
-        verbose=False,
-        every_n_train_steps=training_cfg.every_n_train_steps)
+    # checkpoint_callback = ModelCheckpoint(
+    #     dirpath=setup_callback.ckptdir,
+    #     filename="ckpt-{step:08d}",
+    #     monitor=training_cfg.monitor,
+    #     mode="max",
+    #     save_top_k=-1,
+    #     verbose=False,
+    #     every_n_train_steps=training_cfg.every_n_train_steps)
+
+    lora_cfg = config.model.params.get("lora_config", None)
+    if lora_cfg is not None:
+        # 用只保存 LoRA 的自定义回调
+        checkpoint_callback = AdapterOnlyCheckpoint(
+            dirpath=setup_callback.ckptdir,
+            filename="ckpt-{step:08d}",
+            monitor=training_cfg.monitor,
+            mode="max",
+            save_top_k=-1,
+            verbose=False,
+            every_n_train_steps=training_cfg.every_n_train_steps,
+            save_weights_only=False,  # 只保存 state_dict
+        )
+    else:
+        # 普通全量保存
+        checkpoint_callback = ModelCheckpoint(
+            dirpath=setup_callback.ckptdir,
+            filename="ckpt-{step:08d}",
+            monitor=training_cfg.monitor,
+            mode="max",
+            save_top_k=-1,
+            verbose=False,
+            every_n_train_steps=training_cfg.every_n_train_steps,
+        )
     all_callbacks.append(checkpoint_callback)
 
     if "callbacks" in config:
