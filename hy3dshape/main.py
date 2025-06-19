@@ -17,6 +17,9 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import os
+os.environ["NCCL_SOCKET_IFNAME"] = "eth0"
+os.environ["NCCL_IB_DISABLE"]   = "1"
+os.environ["NCCL_DEBUG"]        = "INFO"
 import torch
 import argparse
 from pathlib import Path

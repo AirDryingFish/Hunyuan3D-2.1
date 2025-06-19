@@ -15,11 +15,13 @@ dataset:
   target: hy3dshape.data.dit_asl.AlignedShapeLatentModule
   params:
     #! Base setting
-    batch_size: 4
+    batch_size: 1
     num_workers: 8
     val_num_workers: 4
 
     # Data 
+    # train_data_list: "/mnt/data/yangzengzhi/code/Hunyuan3D-2.1/model_list_train.json"
+    # val_data_list: "/mnt/data/yangzengzhi/code/Hunyuan3D-2.1/model_list_val.json"
     train_data_list: tools/mini_trainset/preprocessed
     val_data_list: tools/mini_trainset/preprocessed
 
@@ -105,6 +107,7 @@ model:
 
     denoiser_cfg:
       target: hy3dshape.models.denoisers.hunyuandit.HunYuanDiTPlain
+      ckpt_path: "/mnt/data/yangzengzhi/ckpts/model_dit.fp16.ckpt"
       params:
         input_size: *num_latents
         in_channels: 64

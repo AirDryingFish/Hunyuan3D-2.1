@@ -53,13 +53,24 @@ class Diffuser(pl.LightningModule):
         # ========= init the model ========= #
         self.denoiser_cfg = denoiser_cfg
         self.model = instantiate_from_config(denoiser_cfg, device=None, dtype=None)
+
+
+            
         self.cond_stage_model = instantiate_from_config(cond_stage_config)
+
+        self.load_ckpt_to_DiT_and_Dino("/mnt/data/yangzengzhi/ckpts/model_dit.fp16.ckpt")
 
         self.ckpt_path = ckpt_path
         if ckpt_path is not None:
             self.init_from_ckpt(ckpt_path, ignore_keys=ignore_keys)
 
         # ========= config lora model ========= #
+        from omegaconf import OmegaConf
+        lora_config = OmegaConf.create({
+            "rank": 16,
+            "target_modules": ["to_q","to_k","to_v","out_proj","proj", "net.2"]
+        })
+
         if lora_config is not None:
             from peft import LoraConfig, get_peft_model
             loraconfig = LoraConfig(
@@ -68,7 +79,10 @@ class Diffuser(pl.LightningModule):
                 target_modules=lora_config.get('target_modules')
             )
             self.model = get_peft_model(self.model, loraconfig)
-
+        # print("===============================")
+        # print("-DiT-")
+        # print(self.model)
+        # print("===============================")
         # ========= config ema model ========= #
         self.ema_config = ema_config
         if self.ema_config is not None:
@@ -118,6 +132,38 @@ class Diffuser(pl.LightningModule):
             print(f'*' * 100)
             print(f'Compile model for acceleration')
             print(f'*' * 100)
+
+    
+    def load_ckpt_to_DiT_and_Dino(self, ckpt_path):
+        ckpt_path = self.denoiser_cfg.ckpt_path
+        print(f"Loading DiT model from {ckpt_path}")
+        ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
+        if "model" in ckpt:
+            state_dict = ckpt["model"]
+        else:
+            state_dict = ckpt  # 回退到完整的 state_dict
+
+        # 4) 加载到 self.model
+        missing, unexpected = self.model.load_state_dict(state_dict, strict=False)
+        if unexpected:
+            print("⚠️ 这些键在模型里没用到，已跳过：", unexpected)
+        if missing:
+            print("⚠️ 这些键没在 checkpoint 里找到：", missing)
+
+        if "conditioner" in ckpt:
+            state_dict = ckpt["conditioner"]
+        else:
+            state_dict = ckpt  # 回退到完整的 state_dict
+
+        # 4) 加载到 self.model
+        missing, unexpected = self.cond_stage_model.load_state_dict(state_dict, strict=False)
+        if unexpected:
+            print("⚠️ 这些键在模型里没用到，已跳过：", unexpected)
+        if missing:
+            print("⚠️ 这些键没在 checkpoint 里找到：", missing)
+
+        print(f"Successfully loaded DiT and Dino weights from {ckpt_path}")
+        
 
     @contextmanager
     def ema_scope(self, context=None):
