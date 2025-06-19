@@ -12,14 +12,11 @@
 # fine-tuning enabling code and other elements of the foregoing made publicly available
 # by Tencent in accordance with TENCENT HUNYUAN COMMUNITY LICENSE AGREEMENT.
 
-from typing import Tuple, List
+from typing import Tuple, List, Dict, Any
 import warnings
 warnings.filterwarnings("ignore")
 
 import os
-os.environ["NCCL_SOCKET_IFNAME"] = "eth0"
-os.environ["NCCL_IB_DISABLE"]   = "1"
-os.environ["NCCL_DEBUG"]        = "INFO"
 import torch
 import argparse
 from pathlib import Path
