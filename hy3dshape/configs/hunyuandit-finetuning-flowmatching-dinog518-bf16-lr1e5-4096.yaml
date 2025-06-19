@@ -43,6 +43,7 @@ dataset:
 model:
   target: hy3dshape.models.diffusion.flow_matching_sit.Diffuser
   params:
+    ckpt: "/mnt/data/yangzengzhi/ckpts/model_dit.fp16.ckpt"
     first_stage_key: "surface"
     cond_stage_key: "image"
     scale_by_std: false

@@ -58,7 +58,7 @@ class Diffuser(pl.LightningModule):
             
         self.cond_stage_model = instantiate_from_config(cond_stage_config)
 
-        self.load_ckpt_to_DiT_and_Dino("/mnt/data/yangzengzhi/ckpts/model_dit.fp16.ckpt")
+        # self.load_ckpt_to_DiT_and_Dino("/mnt/data/yangzengzhi/ckpts/model_dit.fp16.ckpt")
 
         self.ckpt_path = ckpt_path
         if ckpt_path is not None:
