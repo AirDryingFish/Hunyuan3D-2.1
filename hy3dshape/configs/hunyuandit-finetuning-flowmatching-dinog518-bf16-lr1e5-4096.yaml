@@ -7,8 +7,8 @@ training:
   base_lr: 1e-5
   gradient_clip_val: 1.0
   gradient_clip_algorithm: "norm"
-  every_n_train_steps: 5000 # 5000
-  val_check_interval: 5000 # 4096
+  every_n_train_steps: 2000 # 5000
+  val_check_interval: 2000 # 4096
   limit_val_batches: 16
 
 dataset:
@@ -22,8 +22,11 @@ dataset:
     # Data 
     # train_data_list: "/mnt/data/yangzengzhi/code/Hunyuan3D-2.1/model_list_train.json"
     # val_data_list: "/mnt/data/yangzengzhi/code/Hunyuan3D-2.1/model_list_val.json"
-    train_data_list: tools/mini_trainset/preprocessed
-    val_data_list: tools/mini_trainset/preprocessed
+    #train_data_list: tools/mini_trainset/preprocessed
+    #val_data_list: tools/mini_trainset/preprocessed
+    train_data_list: /mnt/data/yangzengzhi/data/shoe_train_data
+    val_data_list: /mnt/data/yangzengzhi/data/shoe_val_data
+    
 
     #! Image loading
     cond_stage_key: "image" # image / text / image_text
@@ -32,8 +35,8 @@ dataset:
     std: &std [0.5, 0.5, 0.5]
 
     #! Point cloud sampling
-    pc_size: &pc_size 81920
-    pc_sharpedge_size: &pc_sharpedge_size 0
+    pc_size: &pc_size 81920 #81920
+    pc_sharpedge_size: &pc_sharpedge_size 0 #0
     sharpedge_label: &sharpedge_label true
     return_normal: true
 
@@ -43,7 +46,7 @@ dataset:
 model:
   target: hy3dshape.models.diffusion.flow_matching_sit.Diffuser
   params:
-    ckpt_path: "/home/yangzengzhi/ckpt/model_dit.fp16.ckpt"
+    ckpt_path: "/mnt/data/yangzengzhi/ckpts/model_dit.fp16.ckpt"
     first_stage_key: "surface"
     cond_stage_key: "image"
     scale_by_std: false
@@ -178,7 +181,7 @@ callbacks:
     logger:
       target: hy3dshape.utils.trainings.mesh_log_callback.ImageConditionalASLDiffuserLogger
       params:
-        step_frequency: 5000 # 10000
+        step_frequency: 2000 # 10000
         num_samples: 1
         sample_times: 1
         mean: *mean
@@ -191,5 +194,5 @@ callbacks:
     file_loggers:
         target: hy3dshape.utils.trainings.mesh_log_callback.ImageConditionalFixASLDiffuserLogger
         params:
-          step_frequency: 5000 # 5000
-          test_data_path: "tools/mini_testset/images.json"
+          step_frequency: 2000 # 5000
+          test_data_path: "/mnt/data/yangzengzhi/data/shoe_test_data/images.json"

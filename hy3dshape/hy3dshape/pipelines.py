@@ -151,6 +151,8 @@ class Hunyuan3DDiTPipeline:
             ckpt_path = ckpt_path.replace('.ckpt', '.safetensors')
         if not os.path.exists(ckpt_path):
             raise FileNotFoundError(f"Model file {ckpt_path} not found")
+        
+        # print(ckpt_path)
         logger.info(f"Loading model from {ckpt_path}")
 
         if use_safetensors:

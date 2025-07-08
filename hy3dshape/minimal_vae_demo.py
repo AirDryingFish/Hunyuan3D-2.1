@@ -30,7 +30,7 @@ loader = SharpEdgeSurfaceLoader(
     num_sharp_points=0,
     num_uniform_points=81920,
 )
-mesh_demo = 'demos/demo.glb'
+mesh_demo = '/mnt/data/yangzengzhi/data/shoe_processed_512/AGLWK603DD2AM5_watertight.obj'
 surface = loader(mesh_demo).to('cuda', dtype=torch.float16)
 print(surface.shape)
 
@@ -41,11 +41,11 @@ mesh = vae.latents2mesh(
     output_type='trimesh',
     bounds=1.01,
     mc_level=0.0,
-    num_chunks=20000,
+    num_chunks=60000,
     octree_resolution=256,
     mc_algo='mc',
     enable_pbar=True
 )
 
 mesh = export_to_trimesh(mesh)[0]
-mesh.export('output.obj')
+mesh.export('output_sharp81920_uniform81920_tokens8192_mc256.obj')

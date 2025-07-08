@@ -24,11 +24,14 @@ import random
 import shutil
 import mathutils
 import cv2
+os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
+# print(bpy.app.version_string)
 
 """=============== BLENDER ==============="""
 
 IMPORT_FUNCTIONS: Dict[str, Callable] = {
-    "obj": bpy.ops.import_scene.obj,
+    # "obj": bpy.ops.import_scene.obj,
+    "obj": bpy.ops.wm.obj_import,
     "glb": bpy.ops.import_scene.gltf,
     "gltf": bpy.ops.import_scene.gltf,
     "usd": bpy.ops.import_scene.usd,
@@ -409,8 +412,22 @@ def init_render(engine='CYCLES', resolution=512, geo_mode=False):
         
     bpy.context.preferences.addons['cycles'].preferences.get_devices()
     # bpy.context.preferences.addons['cycles'].preferences.compute_device_type = 'CUDA'
+
+    bpy.context.scene.cycles.use_persistent_data = True
+    bpy.context.scene.render.use_persistent_data = True
+
+    bpy.context.preferences.addons['cycles'].preferences.compute_device_type = 'CUDA'  # 或 'OPTIX' 或 'HIP'，取决于你的显卡
+    prefs = bpy.context.preferences.addons['cycles'].preferences
+    prefs.get_devices()
+    for device in prefs.devices:
+        device.use = True
+
+    prefs = bpy.context.preferences.addons['cycles'].preferences
+    prefs.get_devices()
+    for device in prefs.devices:
+        print(device.name, device.type, device.use)
     
-def init_nodes(save_depth=False, save_normal=False, save_albedo=False, save_mr = False, save_mist=False):
+def init_nodes(save_depth=False, save_normal=False, save_albedo=False, save_mr = False, save_mist=False, output_folder=None):
     if not any([save_depth, save_normal, save_albedo, save_mist]):
         return {}, {}, []
     outputs = {}
@@ -431,9 +448,13 @@ def init_nodes(save_depth=False, save_normal=False, save_albedo=False, save_mr =
     
     if save_depth:
         depth_file_output = nodes.new('CompositorNodeOutputFile')
-        depth_file_output.base_path = ''
+        depth_file_output.base_path = output_folder
         depth_file_output.file_slots[0].use_node_format = True
+        # depth_file_output.format.file_format = "OPEN_EXR"
+        # depth_file_output.elements[0].use_node_format = True
         depth_file_output.format.file_format = "OPEN_EXR"
+        # depth_file_output.elements[0].path = "depth_"
+
         links.new(render_layers.outputs['Depth'], depth_file_output.inputs[0])
         
         outputs['depth'] = depth_file_output
@@ -441,9 +462,14 @@ def init_nodes(save_depth=False, save_normal=False, save_albedo=False, save_mr =
     
     if save_normal:
         normal_file_output = nodes.new('CompositorNodeOutputFile')
-        normal_file_output.base_path = ''
+        normal_file_output.base_path = output_folder
         normal_file_output.file_slots[0].use_node_format = True
-        normal_file_output.format.file_format = 'OPEN_EXR'
+        # normal_file_output.format.file_format = 'OPEN_EXR'
+
+        # normal_file_output.elements[0].use_node_format = True
+        normal_file_output.format.file_format = "OPEN_EXR"
+        # normal_file_output.elements[0].path = "normal_"
+
         links.new(render_layers.outputs['Normal'], normal_file_output.inputs[0])
         
         outputs['normal'] = normal_file_output
@@ -451,8 +477,10 @@ def init_nodes(save_depth=False, save_normal=False, save_albedo=False, save_mr =
     
     if save_albedo:
         albedo_file_output = nodes.new('CompositorNodeOutputFile')
-        albedo_file_output.base_path = ''
+        albedo_file_output.base_path = output_folder
         albedo_file_output.file_slots[0].use_node_format = True
+        # albedo_file_output.elements[0].use_node_format = True
+
         albedo_file_output.format.file_format = 'PNG'
         albedo_file_output.format.color_mode = 'RGBA'
         albedo_file_output.format.color_depth = '8'
@@ -468,8 +496,12 @@ def init_nodes(save_depth=False, save_normal=False, save_albedo=False, save_mr =
 
     if save_mr:
         mr_file_output = tree.nodes.new(type='CompositorNodeOutputFile')
-        mr_file_output.base_path = ''
+        mr_file_output.base_path = output_folder
+
         mr_file_output.file_slots[0].use_node_format = True
+        # mr_file_output.elements[0].use_node_format = True
+
+
         mr_file_output.format.file_format = 'OPEN_EXR'
         
         links.new(render_layers.outputs['Image'], mr_file_output.inputs[0])
@@ -482,7 +514,7 @@ def init_nodes(save_depth=False, save_normal=False, save_albedo=False, save_mr =
         bpy.data.worlds['World'].mist_settings.depth = 10
         
         mist_file_output = nodes.new('CompositorNodeOutputFile')
-        mist_file_output.base_path = ''
+        mist_file_output.base_path = output_folder
         mist_file_output.file_slots[0].use_node_format = True
         mist_file_output.format.file_format = 'PNG'
         mist_file_output.format.color_mode = 'BW'
@@ -790,7 +822,8 @@ def main(arg):
         save_depth=arg.save_depth,
         save_normal=arg.save_normal,
         save_albedo=arg.save_albedo,
-        save_mist=arg.save_mist
+        save_mist=arg.save_mist,
+        output_folder=arg.output_folder
     )
     if arg.object.endswith(".blend"):
         delete_invisible_objects()
@@ -822,7 +855,7 @@ def main(arg):
         "offset": [offset.x, offset.y, offset.z],
         "frames": []
     }
-
+    print(f"[DEBUG] views nums: {len(views)}")
     for i, view in enumerate(views):
         cam.location = (
             view['cam_dis'] * np.cos(view['hangle']) * np.cos(view['vangle']),
@@ -837,7 +870,8 @@ def main(arg):
 
         bpy.context.scene.render.filepath = os.path.join(arg.output_folder, f'{i:03d}.png')
         for name, output in outputs.items():
-            output.file_slots[0].path = os.path.join(arg.output_folder, f'{i:03d}_{name}')
+            # output.file_slots[0].path = os.path.join(arg.output_folder, f'{i:03d}_{name}')
+            output.file_slots[0].path = f"{i:03d}_{name}"
             
         # Render the scene
         if not arg.geo_mode:
@@ -851,8 +885,17 @@ def main(arg):
         bpy.context.view_layer.update()
         for name, output in outputs.items():
             ext = EXT[output.format.file_format]
-            path = glob.glob(f'{output.file_slots[0].path}*.{ext}')[0]
-            os.rename(path, f'{output.file_slots[0].path}.{ext}')
+            path_pre = f'{os.path.join(arg.output_folder, output.file_slots[0].path)}*.{ext}'
+            # print(f"[DEBUG] name: {name}")
+            # print(f"[DEBUG] ext: {ext}")
+            # print(f"[DEBUG] output.file_slots[0].path: {output.file_slots[0].path}")
+            # print(f"[DEBUG] path_pre: {path_pre}")
+            # print(f"[DEBUG] files in dir: {os.listdir(os.path.dirname(output.file_slots[0].path))}")
+            # print(f"[DEBUG] glob result: {glob.glob(path_pre)}")
+            path = glob.glob(path_pre)[0]
+            os.rename(path, f'{os.path.join(arg.output_folder, output.file_slots[0].path)}.{ext}')
+            # path = glob.glob(f'{output.elements[0].path}*.{ext}')[0]
+            # os.rename(path, f'{output.elements[0].path}.{ext}')
         
         if not arg.geo_mode:
             ConvertNormalMap(os.path.join(arg.output_folder, f'{i:03d}_normal.exr'), 

@@ -16,8 +16,11 @@ import argparse
 import igl
 import numpy as np
 import os
+# os.environ['PYOPENGL_PLATFORM'] = 'egl'
+os.environ['PYOPENGL_PLATFORM'] = 'osmesa'
 from scipy.stats import truncnorm
 import trimesh
+import json
 
 def random_sample_pointcloud(mesh, num = 30000):
     points, face_idx = mesh.sample(num, return_index=True)
@@ -89,38 +92,44 @@ def sample_sdf(mesh, random_surface, sharp_surface):
 
     sign_type = igl.SIGNED_DISTANCE_TYPE_FAST_WINDING_NUMBER
     try:
-        vol_sdf, I, C = igl.signed_distance(
+        vol_sdf, I, C, *rest = igl.signed_distance(
             vol_points.astype(np.float32), 
             mesh.vertices, mesh.faces, 
-            return_normals=False,
-            sign_type=sign_type)
+            # return_normals=False,
+            sign_type=sign_type
+            )
     except:
-        vol_sdf, I, C = igl.signed_distance(
+        vol_sdf, I, C, *rest = igl.signed_distance(
             vol_points.astype(np.float32), 
             mesh.vertices, mesh.faces, 
-            return_normals=False)
+            # return_normals=False
+            )
     try:
-        random_near_sdf, I, C = igl.signed_distance(
+        random_near_sdf, I, C, *rest = igl.signed_distance(
             random_near_points.astype(np.float32), 
             mesh.vertices, mesh.faces, 
-            return_normals=False,
-            sign_type=sign_type)
+            # return_normals=False,
+            sign_type=sign_type
+            )
     except:
-        random_near_sdf, I, C = igl.signed_distance(
+        random_near_sdf, I, C, *rest = igl.signed_distance(
             random_near_points.astype(np.float32), 
             mesh.vertices, mesh.faces, 
-            return_normals=False)
+            # return_normals=False
+            )
     try:
-        sharp_near_sdf, I, C = igl.signed_distance(
+        sharp_near_sdf, I, C, *rest = igl.signed_distance(
             sharp_near_points.astype(np.float32), 
             mesh.vertices, mesh.faces, 
-            return_normals=False,
-            sign_type=sign_type)
+            # return_normals=False,
+            sign_type=sign_type
+            )
     except:
-        sharp_near_sdf, I, C = igl.signed_distance(
+        sharp_near_sdf, I, C, *rest = igl.signed_distance(
             sharp_near_points.astype(np.float32), 
             mesh.vertices, mesh.faces, 
-            return_normals=False)
+            # return_normals=False
+            )
         
     vol_label = -vol_sdf
     random_near_label = -random_near_sdf
@@ -137,6 +146,9 @@ def sample_sdf(mesh, random_surface, sharp_surface):
     return data
 
 def SampleMesh(V, F):
+    print("sampling")
+    V = np.ascontiguousarray(V, dtype=np.float32)
+    F = np.ascontiguousarray(F, dtype=np.int32)
     mesh = trimesh.Trimesh(vertices=V, faces=F)
 
     area = mesh.area
@@ -153,9 +165,10 @@ def SampleMesh(V, F):
         "random_surface": surface,
         "sharp_surface": sharp_surface,
     }
-
-    sdf_data = sample_sdf(mesh, random_surface, random_sharp_surface)
-    return surface_data, sdf_data
+    # print(f"sampling sdf")
+    # sdf_data = sample_sdf(mesh, random_surface, random_sharp_surface)
+    # return surface_data, sdf_data
+    return surface_data
 
 def normalize_to_unit_box(V):
     """
@@ -163,15 +176,21 @@ def normalize_to_unit_box(V):
     V: (n,3) numpy array of vertex positions.
     Returns: normalized V
     """
+    # V_min = V.min(axis=0)
+    # V_max = V.max(axis=0)
+    # scale = (V_max - V_min).max() * 1.01
+    # V_normalized = (V - V_min) / scale
+    # return V_normalized
     V_min = V.min(axis=0)
     V_max = V.max(axis=0)
-    scale = (V_max - V_min).max() * 1.01
-    V_normalized = (V - V_min) / scale
-    return V_normalized
+    center = (V_min + V_max) / 2
+    scale = (V_max - V_min).max() * 1.01 / 2
+    V_norm = (V - center) / scale
+    return V_norm
 
 # Given: V (n x 3 array of vertices), F (m x 3 array of faces)
 # Parameters epsilon/grid_res
-def Watertight(V, F, epsilon = 2.0/256, grid_res = 256):
+def Watertight(V, F, epsilon = 2.0/512, grid_res = 512):
     # Compute bounding box
     min_corner = V.min(axis=0)
     max_corner = V.max(axis=0)
@@ -187,37 +206,223 @@ def Watertight(V, F, epsilon = 2.0/256, grid_res = 256):
     grid_points = np.vstack([X.ravel(), Y.ravel(), Z.ravel()]).T
 
     # Compute SDF at grid points using igl.signed_distance with pseudo normals
-    sdf, _, _ = igl.signed_distance(
+    sdf, *rest = igl.signed_distance(
         grid_points, V, F, sign_type=igl.SIGNED_DISTANCE_TYPE_PSEUDONORMAL
     )
  
     # igl.marching_cubes returns (vertices, faces)
-    mc_verts, mc_faces = igl.marching_cubes(epsilon - np.abs(sdf), grid_points, grid_res, grid_res, grid_res, 0.0)
+    mc_verts, mc_faces, *rest = igl.marching_cubes(epsilon - np.abs(sdf), grid_points, grid_res, grid_res, grid_res, 0.0)
 
     # mc_verts: (k x 3) array of vertices of the epsilon contour
     # mc_faces: (l x 3) array of faces of the epsilon contour
     return mc_verts, mc_faces
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Process an OBJ file and output surface and SDF data.')
-    parser.add_argument('--input_obj', type=str, help='Path to the input OBJ file')
-    parser.add_argument('--output_prefix', type=str, default=None, 
-        help='Base name for output files (default: input OBJ filename without extension)')
-    args = parser.parse_args()
+CAMERA_DIST = 3.0
+NUM_VIEWS = 50
+IMG_SIZE = 512
 
-    input_obj = args.input_obj
-    name = args.output_prefix
+def id_to_rgb01(idx: int):
+    # idx 从 1 开始，保证 0 作为背景
+    r = (idx >> 16) & 0xFF
+    g = (idx >> 8 ) & 0xFF
+    b = (idx      ) & 0xFF
+    return np.array([r, g, b], dtype=np.float32)/255.0
 
+# helper: 将 uint8 RGB 解码回整数 ID
+def rgb8_to_id(rgb8: np.ndarray):
+    # rgb8: H×W×3 uint8
+    flat = rgb8.reshape(-1, 3).astype(np.uint32)
+    return (flat[:,0] << 16) | (flat[:,1] << 8) | flat[:,2]
+
+
+def _generate_camera_poses(num_views=NUM_VIEWS, dist=CAMERA_DIST):
+    """
+    Create world-to-camera poses on a sphere around the origin.
+    Returns list of 4x4 camera transforms for pyrender (camera looks along -Z axis).
+    """
+    poses = []
+    for i in range(num_views):
+        theta = 2 * np.pi * i / num_views
+        phi = np.pi / 6
+        x = dist * np.cos(phi) * np.cos(theta)
+        y = dist * np.cos(phi) * np.sin(theta)
+        z = dist * np.sin(phi)
+        eye = np.array([x, y, z], dtype=np.float32)
+        target = np.zeros(3, dtype=np.float32)
+        up = np.array([0, 0, 1], dtype=np.float32)
+        # compute camera basis: right, true up, forward (view direction)
+        # pyrender expects camera -Z axis to point towards the scene
+        forward = eye - target
+        forward /= np.linalg.norm(forward)
+        right = np.cross(up, forward)
+        right /= np.linalg.norm(right)
+        true_up = np.cross(forward, right)
+        # assemble rotation: columns are basis vectors
+        # local X->right, local Y->true_up, local Z->forward
+        R = np.stack([right, true_up, forward], axis=1)
+        # pose maps camera to world
+        pose = np.eye(4, dtype=np.float32)
+        pose[:3, :3] = R
+        pose[:3, 3] = eye
+        poses.append(pose)
+    return poses
+
+def process_obj(input_obj: str, output_prefix: str):
+    # 读取网格
     V, F = igl.read_triangle_mesh(input_obj)
+    # 如果没有顶点，则跳过
+    if V is None or V.shape[0] == 0:
+        print(f"警告: 在文件 {input_obj} 中未读到顶点，跳过处理")
+        return
+
+    # 归一化到单位盒
     V = normalize_to_unit_box(V)
 
+    # 保证网格闭合并采样生成 surface 与 sdf 数据
     mc_verts, mc_faces = Watertight(V, F)
-    surface_data, sdf_data = SampleMesh(mc_verts, mc_faces)
 
-    parent_folder = os.path.dirname(args.output_prefix)
-    os.makedirs(parent_folder, exist_ok=True)
-    export_surface = f'{name}_surface.npz'
-    np.savez(export_surface, **surface_data)
-    export_sdf = f'{name}_sdf.npz'
-    np.savez(export_sdf, **sdf_data)
-    igl.write_obj(f'{name}_watertight.obj', mc_verts, mc_faces)
+    # ——— 只保留最大的连通组件 ———
+    full_mesh = trimesh.Trimesh(vertices=mc_verts, faces=mc_faces)
+
+    components = full_mesh.split(only_watertight=False)
+    N_comp = len(components)
+    print(f"Found {N_comp} components")
+    import pyrender
+
+    # with pyrender.OffscreenRenderer(
+    #     viewport_width=IMG_SIZE,
+    #     viewport_height=IMG_SIZE,
+    # ) as renderer:
+
+    # create vis directory
+    # vis_dir = os.path.splitext(remesh_path)[0] + '_vis_colorid'
+    # os.makedirs(vis_dir, exist_ok=True)
+
+    # build scene with ID materials
+    scene = pyrender.Scene(bg_color=[0,0,0,0], ambient_light=[1,1,1])
+    for idx, comp in enumerate(components):
+        vid = idx+1
+        rgb01 = id_to_rgb01(vid)
+        mat = pyrender.MetallicRoughnessMaterial(
+            baseColorFactor=[*rgb01,1.0], metallicFactor=0.0, roughnessFactor=1.0)
+        node = pyrender.Mesh.from_trimesh(comp, material=mat, smooth=False)
+        scene.add(node)
+
+    # render each view and save color_id image
+    renderer = pyrender.OffscreenRenderer(IMG_SIZE, IMG_SIZE)
+    cam_poses = _generate_camera_poses()
+    camera = pyrender.PerspectiveCamera(yfov=np.pi/3.0)
+    visible_ids = set()
+
+    for i, pose in enumerate(cam_poses):
+        cam_node = scene.add(camera, pose=pose)
+        color_buf, _ = renderer.render(scene, flags=pyrender.RenderFlags.RGBA| pyrender.RenderFlags.FLAT)
+        scene.remove_node(cam_node)
+        # save pure ID render
+        # filename = os.path.join(vis_dir, f'view_{i:02d}_id.png')
+        # imageio.imwrite(filename, color_buf)
+        # decode visible IDs
+        ids_all = rgb8_to_id(color_buf[...,:3].astype(np.uint8))
+        unique = np.unique(ids_all)
+        visible_ids.update(unique[unique>0])
+
+    renderer.delete()
+
+    # filter and export
+    vis_idxs = [vid-1 for vid in visible_ids]
+    if not vis_idxs:
+        print("No visible components, exporting full mesh.")
+        final = full_mesh
+    else:
+        print(f"{len(vis_idxs)}/{N_comp} visible components")
+        final = trimesh.util.concatenate([components[i] for i in vis_idxs])
+    try:
+        # print(f"faces = {final.faces.shape[0]}")
+        # target_faces = 2000_000
+        # if final.faces.shape[0] > target_faces:
+        #     final = final.simplify_quadratic_decimation(target_faces)
+        #     print(f"简化到 {len(final.faces)} faces 以降低后续计算量")
+        mc_verts, mc_faces = final.vertices, final.faces
+
+        # surface_data, sdf_data = SampleMesh(mc_verts, mc_faces)
+        surface_data = SampleMesh(mc_verts, mc_faces)
+
+        # 创建输出目录
+        parent_folder = os.path.dirname(output_prefix)
+        os.makedirs(parent_folder, exist_ok=True)
+
+        # 保存结果
+        np.savez(f'{output_prefix}_surface.npz', **surface_data)
+        # np.savez(f'{output_prefix}_sdf.npz', **sdf_data)
+        igl.writeOBJ(f'{output_prefix}_watertight.obj', mc_verts, mc_faces)
+    except Exception as e:
+        print("SampleMesh 运行时报错：", e)
+        return
+
+
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+def worker(entry, output_dir):
+    # 根据 entry 决定 obj_path 和 base_name
+    if isinstance(entry, str):
+        obj_path = entry
+        base_name = os.path.splitext(os.path.basename(obj_path))[0]
+    else:
+        obj_path = entry['path']
+        base_name = entry.get('name', os.path.splitext(os.path.basename(obj_path))[0])
+
+    # 设定输出前缀
+    if output_dir:
+        output_folder = os.path.join(output_dir, base_name)
+    else:
+        parent = os.path.dirname(obj_path)
+        output_folder = os.path.join(parent, base_name)
+
+    print(f"Processing {obj_path} -> {output_folder}")
+    # 调用原来的处理函数
+    process_obj(obj_path, output_folder)
+    return obj_path
+from concurrent.futures import ProcessPoolExecutor, as_completed
+def main():
+    parser = argparse.ArgumentParser(
+        description='Batch process OBJ files listed in a JSON and output surface/SDF data (multi-process).'
+    )
+    parser.add_argument(
+        '--json_path', type=str,
+        default='/mnt/data/yangzengzhi/data/objs.json',
+        help='Path to JSON file listing OBJ entries'
+    )
+    parser.add_argument(
+        '--output_dir', type=str,
+        default='/mnt/data/yangzengzhi/data/shoe_processed_512/',
+        help='Directory to save outputs (default: same folder as each OBJ)'
+    )
+    parser.add_argument(
+        '--workers', type=int, default=4,
+        help='Number of parallel worker processes (default: CPU count)'
+    )
+    args = parser.parse_args()
+
+    # 加载 JSON
+    with open(args.json_path, 'r') as f:
+        obj_entries = json.load(f)
+
+    # 建议把 entries 转成 list，确保长度可知
+    entries = list(obj_entries)
+
+    # 并行执行
+    with ProcessPoolExecutor(max_workers=args.workers) as executor:
+        # 提交所有任务
+        futures = {executor.submit(worker, entry, args.output_dir): entry for entry in entries}
+
+        # 可选：监控进度
+        for future in as_completed(futures):
+            entry = futures[future]
+            try:
+                obj_path = future.result()
+                print(f"[Done] {obj_path}")
+            except Exception as e:
+                print(f"[Error] {entry}: {e}")
+
+if __name__ == '__main__':
+    main()

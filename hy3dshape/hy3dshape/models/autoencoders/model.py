@@ -211,6 +211,8 @@ class VectsetVAE(nn.Module):
     def latents2mesh(self, latents: torch.FloatTensor, **kwargs):
         with synchronize_timer('Volume decoding'):
             grid_logits = self.volume_decoder(latents, self.geo_decoder, **kwargs)
+            # print(f"grid_logits.max() = {grid_logits.max()}")
+            # print(f"grid_logits.min() = {grid_logits.min()}")
         with synchronize_timer('Surface extraction'):
             outputs = self.surface_extractor(grid_logits, **kwargs)
         return outputs
@@ -321,7 +323,7 @@ class ShapeVAE(VectsetVAE):
         latents = self.transformer(latents)
         return latents
 
-    def encode(self, surface, sample_posterior=True):
+    def encode(self, surface, sample_posterior=True, return_kl=False):
         pc, feats = surface[:, :, :3], surface[:, :, 3:]
         latents, _ = self.encoder(pc, feats)
         # print(latents.shape, self.pre_kl.weight.shape)
@@ -331,6 +333,10 @@ class ShapeVAE(VectsetVAE):
             latents = posterior.sample()
         else:
             latents = posterior.mode()
+
+        if return_kl:
+            return latents, posterior
+        
         return latents
 
     def decode(self, latents):

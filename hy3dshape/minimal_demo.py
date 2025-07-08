@@ -20,7 +20,7 @@ from hy3dshape.pipelines import Hunyuan3DDiTFlowMatchingPipeline
 model_path = 'tencent/Hunyuan3D-2.1'
 pipeline_shapegen = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(model_path)
 
-image_path = 'demos/demo.png'
+image_path = '/mnt/data/yangzengzhi/data/shoe_test_data/images/013.png'
 image = Image.open(image_path).convert("RGBA")
 if image.mode == 'RGB':
     rembg = BackgroundRemover()

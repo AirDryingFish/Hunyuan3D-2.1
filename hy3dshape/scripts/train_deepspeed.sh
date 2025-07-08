@@ -5,7 +5,7 @@ export NCCL_IB_TIMEOUT=24
 export NCCL_NVLS_ENABLE=0
 export node_num=1
 export node_rank=0
-export master_ip=10.25.25.83 # set your master_ip
+export master_ip=172.31.0.4 # set your master_ip
 export config=configs/hunyuandit-finetuning-flowmatching-dinog518-bf16-lr1e5-4096.yaml
 export output_dir=output_folder/dit/overfitting
 export NCCL_IB_DISABLE=1
@@ -27,8 +27,8 @@ else
     export NCCL_IB_DISABLE=0
     export NCCL_LL_THRESHOLD=16384
     export NCCL_IB_CUDA_SUPPORT=1
-    export NCCL_SOCKET_IFNAME=bond0
-    export UCX_NET_DEVICES=bond0
+    export NCCL_SOCKET_IFNAME=eth0
+    export UCX_NET_DEVICES=eth0
     export NCCL_IB_HCA=mlx5_bond_1,mlx5_bond_5,mlx5_bond_3,mlx5_bond_7,mlx5_bond_4,mlx5_bond_8,mlx5_bond_2,mlx5_bond_6
     export NCCL_COLLNET_ENABLE=0
     export SHARP_COLL_ENABLE_SAT=0
@@ -75,4 +75,4 @@ python3 main.py \
     --num_gpus 8 \
     --config $config \
     --output_dir $output_dir \
-    --deepspeed
+    --deepspeed2

@@ -584,14 +584,14 @@ class PointCrossAttentionEncoder(nn.Module):
 
     def sample_points_and_latents(self, pc: torch.FloatTensor, feats: Optional[torch.FloatTensor] = None):
         B, N, D = pc.shape
-        num_pts = self.num_latents * self.downsample_ratio
+        num_pts = self.num_latents * self.downsample_ratio # 4096 * 20
 
         # Compute number of latents
-        num_latents = int(num_pts / self.downsample_ratio)
+        num_latents = int(num_pts / self.downsample_ratio) # 81920 / 20 = 4096
 
         # Compute the number of random and sharpedge latents
-        num_random_query = self.pc_size / (self.pc_size + self.pc_sharpedge_size) * num_latents
-        num_sharpedge_query = num_latents - num_random_query
+        num_random_query = self.pc_size / (self.pc_size + self.pc_sharpedge_size) * num_latents # 4096 / 2 = 2048
+        num_sharpedge_query = num_latents - num_random_query # 4096 - 2048 = 2048
 
         # Split random and sharpedge surface points
         random_pc, sharpedge_pc = torch.split(pc, [self.pc_size, self.pc_sharpedge_size], dim=1)
@@ -600,15 +600,15 @@ class PointCrossAttentionEncoder(nn.Module):
                    1] <= self.pc_sharpedge_size, "Sharpedge surface points size must be less than or equal to pc_sharpedge_size"
 
         # Randomly select random surface points and random query points
-        input_random_pc_size = int(num_random_query * self.downsample_ratio)
-        random_query_ratio = num_random_query / input_random_pc_size
-        idx_random_pc = torch.randperm(random_pc.shape[1], device=random_pc.device)[:input_random_pc_size]
+        input_random_pc_size = int(num_random_query * self.downsample_ratio) # 2048 * 20 = 40960
+        random_query_ratio = num_random_query / input_random_pc_size # 2048 / 40960
+        idx_random_pc = torch.randperm(random_pc.shape[1], device=random_pc.device)[:input_random_pc_size] # 随机取40960个点
         input_random_pc = random_pc[:, idx_random_pc, :]
-        flatten_input_random_pc = input_random_pc.view(B * input_random_pc_size, D)
-        N_down = int(flatten_input_random_pc.shape[0] / B)
-        batch_down = torch.arange(B).to(pc.device)
-        batch_down = torch.repeat_interleave(batch_down, N_down)
-        idx_query_random = fps(flatten_input_random_pc, batch_down, ratio=random_query_ratio)
+        flatten_input_random_pc = input_random_pc.view(B * input_random_pc_size, D) # [B * 40960, 7]
+        N_down = int(flatten_input_random_pc.shape[0] / B) # 每个 batch 原来有多少点
+        batch_down = torch.arange(B).to(pc.device) # [0, 1, …, B-1]
+        batch_down = torch.repeat_interleave(batch_down, N_down) # [0×N_down, 1×N_down, …, (B-1)×N_down]
+        idx_query_random = fps(flatten_input_random_pc, batch_down, ratio=random_query_ratio) # (B * N_query_target, D)
         query_random_pc = flatten_input_random_pc[idx_query_random].view(B, -1, D)
 
         # Randomly select sharpedge surface points and sharpedge query points
